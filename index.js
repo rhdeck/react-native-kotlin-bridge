@@ -32,18 +32,20 @@ const getPackageName = initialPath => {
       return l.trim().indexOf("package") === 0;
     });
     if (packageLine) {
-      package = packageLine
+      const p = packageLine
         .substring("package ".length, packageLine.length)
         .trim();
-      if (package) {
-        outfiles[package] = outfiles[package] ? outfiles[package] + 1 : 1;
+      if (p) {
+        outfiles[p] = outfiles[p] ? outfiles[p] + 1 : 1;
       }
     }
   });
   const top = Object.keys(outfiles)
     .sort((a, b) => {
-      if (outfiles[a] > outfiles[b]) return 1;
-      if (outfiles[b] < outfiles[a]) return -1;
+      if (outfiles[a] < outfiles[b]) return 1;
+      if (outfiles[a] > outfiles[b]) return -1;
+      if (a > b) return 1;
+      if (a < b) return -1;
       return 0;
     })
     .shift();
@@ -79,7 +81,7 @@ const getKTClassesFromFile = thisPath => {
   origLines.forEach((line, index) => {
     const trimmedline = line.trim();
     if (!currentMode) {
-      if (trimmedline.indexOf("@React") === 0) {
+      if (trimmedline.indexOf("@ReactMethod") === 0) {
         //I'm headed into a mode!
         currentMode = trimmedline;
         return;
@@ -119,17 +121,48 @@ const getKTClassesFromFile = thisPath => {
           reactName: currentReactClass,
           rawClass: trimmedline,
           baseClass,
-          package: currentPackage
+          package: currentPackage,
+          props: {}
         };
       } else if (
         trimmedline.indexOf("package") === 0 &&
         currentPackage === null
       ) {
-        console.log("I am be working with a package!!", trimmedline);
         currentPackage = trimmedline.substring(
           "package ".length,
           trimmedline.length
         );
+      } else if (trimmedline.startsWith("@ReactProp")) {
+        //Extract args
+        const arginfo = trimmedline.substring(
+          trimmedline.indexOf("(") + 1,
+          trimmedline.length - 1
+        );
+        const args = arginfo.split(",").map(arg => {
+          const [key, value] = arg.split("=", 2).map(x => x.trim());
+          return { key, value };
+        });
+        const name = args
+          .filter(arg => arg.key == "name")
+          .pop()
+          .value.replace(/^\"|\"$/g, "");
+        classes[currentClass].props[name] = args;
+      } else if (trimmedline.startsWith("//@ReactProp")) {
+        //This is used for functional props
+        const arginfo = trimmedline.substring(
+          trimmedline.indexOf("(") + 1,
+          trimmedline.length - 1
+        );
+        const args = arginfo.split(",").map(arg => {
+          const [key, value] = arg.split("=", 2).map(x => x.trim());
+          return { key, value };
+        });
+        const name = args
+          .filter(arg => arg.key == "name")
+          .pop()
+          .value.replace(/^\"|\"$/g, "");
+        args.push({ key: "type", value: "func" });
+        classes[currentClass].props[name] = args;
       }
     } else {
       if (!currentLines) {
@@ -215,7 +248,11 @@ function getReactPackageInteriorFromClasses(classes) {
   const viewManagerLines = [];
   Object.keys(classes).forEach(k => {
     obj = classes[k];
-    if (getBaseClass(obj, classes) == "ViewManager") {
+    if (
+      ["ViewManager", "SimpleViewManager", "ViewGroupManager"].indexOf(
+        getBaseClass(obj, classes)
+      ) > -1
+    ) {
       viewManagerLines.push("    viewManagers.add(" + k + +"(reactContext))");
     } else if (getBaseClass(obj, classes) == "ReactContextBaseJavaModule") {
       moduleLines.push("    modules.add(" + k + "(reactContext))");
@@ -255,7 +292,6 @@ function getReactPackageFromInterior(packageName, interior, imps) {
     imports: imps,
     className: packageName.replace(/\./g, "_")
   };
-  console.log("Wroking with imports of ", imps);
   const template = fs.readFileSync(__dirname + "/templates/reactpackage.kt", {
     encoding: "UTF8"
   });
@@ -268,9 +304,12 @@ function getImports(packageName, classes) {
   Object.keys(classes).forEach(k => {
     obj = classes[k];
     if (
-      ["ViewManager", "ReactContextBaseJavaModule"].indexOf(
-        getBaseClass(obj, classes)
-      ) > -1 &&
+      [
+        "ViewManager",
+        "ViewGroupManager",
+        "SimpleViewManager",
+        "ReactContextBaseJavaModule"
+      ].indexOf(getBaseClass(obj, classes)) > -1 &&
       obj.package != packageName
     ) {
       imports.push(obj.package + "." + k);
@@ -285,14 +324,25 @@ function getJSFromPath(thisPath) {
   return getJSFromClasses(classes);
 }
 function getJSFromClasses(classes) {
-  var outlines = ['import { NativeModules } from "react-native"'];
+  var outlines = [
+    'import { NativeModules, requireNativeComponent } from "react-native"',
+    'import React, { Component } from "react"',
+    'import PropTypes from "prop-types"'
+  ];
   var exportables = [];
   Object.keys(classes).forEach(k => {
     const obj = classes[k];
-    const reactName = obj.reactName;
-    if (!reactName) return;
+    const reactName = obj.reactName || k;
+    if (!reactName) {
+      if (
+        (obj.methods && Object.keys(obj.methods).length) ||
+        (obj.props && Object.keys(obj.keys).length)
+      ) {
+        outlines.push("// MISSING @ReactClassName hint on class " + k);
+      }
+    }
     const NativeObj = "Native" + reactName;
-    if (obj.methods) {
+    if (obj.methods && Object.keys(obj.methods).length) {
       outlines.push("//#region Code for object " + reactName);
       outlines.push("const " + NativeObj + "= NativeModules." + reactName);
       Object.keys(obj.methods).forEach(m => {
@@ -305,7 +355,7 @@ function getJSFromClasses(classes) {
             return !arg || ["Promise"].indexOf(arg.type) == -1;
           })
           .map(arg => {
-            return arg ? arg.name : null;
+            return arg ? arg.name || arg.key : null;
           });
         var line =
           "const " +
@@ -326,11 +376,42 @@ function getJSFromClasses(classes) {
         exportables.push(JSm);
       });
       outlines.push("//#endregion");
+    } else if (obj.props && Object.keys(obj.props).length) {
+      exportables.push(reactName);
+      outlines.push("//#region Code for object " + reactName);
+      outlines.push(
+        "const " +
+          NativeObj +
+          "= requireNativeComponent('" +
+          reactName +
+          "', " +
+          reactName +
+          ")"
+      );
+      outlines.push("class " + reactName + " extends Component {");
+      outlines.push("  render() {");
+      outlines.push("    return (");
+      outlines.push("      <" + NativeObj + " { ...this.props } " + "/>");
+      outlines.push("    );");
+      outlines.push("  }");
+
+      outlines.push("}");
+      outlines.push(reactName + ".propTypes = {");
+      Object.keys(obj.props).forEach(propName => {
+        var o = {};
+        obj.props[propName].forEach(p => {
+          o[p.key] = p.value;
+        });
+        if (!o.type) o.type = "any";
+        outlines.push(propName + ": PropTypes." + o.type + ",");
+      });
+      outlines.push("}");
     }
   });
   outlines.push("//#region Exports");
   outlines.push("export {\n  " + exportables.join(",\n  ") + "\n}");
   outlines.push("//#endregion");
+  //   const out = outlines.join("\n");
   const out = prettier.format(outlines.join("\n"), { parser: "babylon" });
 
   return out;
@@ -338,16 +419,34 @@ function getJSFromClasses(classes) {
 function writeJSFile(js, initialPath) {
   if (!initialPath) initialPath = process.cwd();
   if (!js) return null;
-  fs.writeFileSync(Path.join(initialPath, "react-kotlin-bridge.js"), js);
-  return true;
+  const fp = Path.join(initialPath, "react-kotlin-bridge.js");
+  const oldText =
+    fs.existsSync(fp) && fs.readFileSync(fp, { encoding: "UTF8" });
+  if (oldText != js) {
+    fs.writeFileSync(fp, js);
+
+    return true;
+  } else return false;
 }
 function writeKTFile(kt, initialPath) {
   if (!kt) return null;
   const paths = getKTClassFiles(initialPath);
   const base = Path.dirname(paths[0]);
-  fs.writeFileSync(Path.join(base, "ReactNativePackage.kt"), kt);
-  return true;
+  const fp = Path.join(base, "ReactNativePackage.kt");
+  const oldText =
+    fs.existsSync(fp) && fs.readFileSync(fp, { encoding: "UTF8" });
+  if (oldText != kt) {
+    fs.writeFileSync(fp, kt);
+    return true;
+  } else return false;
 }
+function makeJSandKT(initialPath) {
+  const out = getClassesFromPath(initialPath);
+  const kt = getReactPackageFromClasses(out);
+  const js = getJSFromClasses(out);
+  return writeJSFile(js) | writeKTFile(kt);
+}
+
 module.exports = {
   getJSFromClasses,
   getClassesFromPath,
@@ -355,5 +454,6 @@ module.exports = {
   getClassesFromPath,
   getKTClassesFromFile,
   writeJSFile,
-  writeKTFile
+  writeKTFile,
+  makeJSandKT
 };

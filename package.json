@@ -30,7 +30,7 @@
   },
   "bin": {
     "react-native-kotlin-bridge": "cli.js",
-    "rnsb": "cli.js",
+    "rnkb": "cli.js",
     "watch": "watch.js"
   }
 }

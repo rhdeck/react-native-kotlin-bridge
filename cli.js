@@ -10,26 +10,15 @@ commander.option("-o --out <outfile>");
 commander.option("-w --watch");
 commander.parse(process.argv);
 var thisPath = commander.args[0] ? commander.args[0] : process.cwd();
-var jsFile = commander.js
-  ? commander.js
-  : Path.join(thisPath, "RNSwiftBridge.js");
 var outfile = commander.out;
-if (!outfile) outfile = core.getRootIOSPath(thisPath);
-if (fs.existsSync(outfile) && fs.lstatSync(outfile).isDirectory()) {
-  outfile = Path.join(outfile, "rn-swift-bridge.m");
-}
 if (commander.watch) {
   try {
-    console.log("Watching for swift changes on " + thisPath);
-    watch(thisPath, { recursive: true, filter: /\.swift$/ }, () => {
-      const text = core.getBridgingModuleTextFromPath(thisPath);
-      console.log("Detected change");
-      if (core.writeIf(outfile, text)) {
-        core.addModuleToPBXProj(outfile, thisPath);
-        console.log("Updated " + outfile);
-        if (core.writeIf(jsFile, core.getJSFromPath(thisPath))) {
-          console.log("Updated " + jsFile);
-        }
+    console.log("Watching for kotlin changes on " + thisPath);
+    watch(thisPath, { recursive: true, filter: /\.kt$/ }, () => {
+      if (core.makeJSandKT(thisPath)) {
+        console.log("Updated KT and JS");
+      } else {
+        console.log("Did not update because they are the same");
       }
     });
   } catch (e) {
@@ -37,13 +26,10 @@ if (commander.watch) {
   }
 } else {
   try {
-    const text = core.getBridgingModuleTextFromPath(thisPath);
-    if (core.writeIf(outfile, text)) {
-      core.addModuleToPBXProj(outfile, thisPath);
-    } else console.log("No changes to ", outfile);
-    console.log("Updated " + outfile);
-    if (core.writeIf(jsFile, core.getJSFromPath(thisPath))) {
-      console.log("Updated " + jsFile);
+    if (core.makeJSandKT(thisPath)) {
+      console.log("Updated KT and JS");
+    } else {
+      console.log("Did not update because no changes");
     }
   } catch (e) {
     console.log("Hit error ", e);
