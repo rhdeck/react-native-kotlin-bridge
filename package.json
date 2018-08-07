@@ -1,0 +1,36 @@
+{
+  "name": "react-native-kotlin-bridge",
+  "version": "1.0.0",
+  "description": "React Native plugin to automatically build the ReactPackage and JS code from Kotlin modules",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhdeck/react-native-kotlin-bridge.git"
+  },
+  "keywords": [
+    "react-native",
+    "kotlin",
+    "android"
+  ],
+  "author": "Ray Deck",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/rhdeck/react-native-kotlin-bridge/issues"
+  },
+  "homepage": "https://github.com/rhdeck/react-native-kotlin-bridge#readme",
+  "dependencies": {
+    "commander": "^2.16.0",
+    "glob": "^7.1.2",
+    "mustache": "^2.3.0",
+    "node-watch": "^0.5.8",
+    "prettier": "^1.13.7"
+  },
+  "bin": {
+    "react-native-kotlin-bridge": "cli.js",
+    "rnsb": "cli.js",
+    "watch": "watch.js"
+  }
+}
