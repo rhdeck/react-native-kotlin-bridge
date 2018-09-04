@@ -286,7 +286,7 @@ function getBaseClass(obj, classes) {
   return baseClass ? baseClass : obj.baseClass;
 }
 function getReactPackageFromInterior(packageName, interior, imps) {
-  if (!packagename) return null;
+  if (!packageName) return null;
   const obj = {
     packageName,
     interior,
