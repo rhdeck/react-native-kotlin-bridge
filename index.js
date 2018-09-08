@@ -326,12 +326,10 @@ function getJSFromPath(thisPath) {
   return getJSFromClasses(classes);
 }
 function getJSFromClasses(classes) {
-  var outlines = [
-    'import { NativeModules, requireNativeComponent } from "react-native"',
-    'import React, { Component } from "react"',
-    'import PropTypes from "prop-types"'
-  ];
+  var outlines = [];
   var exportables = [];
+  var hasViews = false;
+  var hasEvents = false;
   Object.keys(classes).forEach(k => {
     const obj = classes[k];
     const reactName = obj.reactName || k;
@@ -380,7 +378,8 @@ function getJSFromClasses(classes) {
       outlines.push("//#endregion");
     } else if (obj.props && Object.keys(obj.props).length) {
       exportables.push(reactName);
-      outlines.push("//#region Code for object " + reactName);
+      hasViews = true;
+      outlines.push("//#region Code for view " + reactName);
       outlines.push(
         "const " +
           NativeObj +
@@ -413,6 +412,16 @@ function getJSFromClasses(classes) {
   outlines.push("//#region Exports");
   outlines.push("export {\n  " + exportables.join(",\n  ") + "\n}");
   outlines.push("//#endregion");
+  outlines.unshift();
+  if (hasViews) {
+    outlines.unshift(
+      'import { NativeModules, requireNativeComponent } from "react-native"',
+      'import React, { Component } from "react"',
+      'import PropTypes from "prop-types"'
+    );
+  } else {
+    outlines.unshift('import {NativeModules} from "react-native"');
+  }
   //   const out = outlines.join("\n");
   const out = prettier.format(outlines.join("\n"), { parser: "babylon" });
 
