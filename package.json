@@ -1,6 +1,6 @@
 {
   "name": "react-native-kotlin-bridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "React Native plugin to automatically build the ReactPackage and JS code from Kotlin modules",
   "main": "index.js",
   "scripts": {
