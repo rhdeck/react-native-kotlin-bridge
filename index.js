@@ -197,6 +197,7 @@ const getKTClassesFromFile = thisPath => {
           const args = raw[0]
             .substring(argsPos, raw[0].indexOf("{"))
             .split(",")
+            .filter(s => s.trim() != ")")
             .map(argval => {
               const argpieces = argval.split(":");
               const key = argpieces[0];
