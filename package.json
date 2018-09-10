@@ -31,6 +31,6 @@
   "bin": {
     "react-native-kotlin-bridge": "cli.js",
     "rnkb": "cli.js",
-    "watch": "watch.js"
+    "rnkb-watch": "watch.js"
   }
 }
